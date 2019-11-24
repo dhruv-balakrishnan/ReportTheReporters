@@ -1,0 +1,11 @@
+{
+  "attributes": {
+    "author": "<meta name=\"author\"",
+    "title":"<title>",
+    "url": "<link rel=\"canonical\""
+  },
+  "cleaning_methods": {
+    "author": "",
+    "title" : ""
+  }
+}

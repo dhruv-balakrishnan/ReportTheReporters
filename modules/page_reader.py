@@ -12,7 +12,7 @@ def read_page(data):
     - keywords
     - title
     - news location
-    - paragraph text all into one.
+    - paragraph text (all)
 
     :param data: the location of the text file
     :return: nothing
@@ -32,8 +32,8 @@ def read_page(data):
 
 def get_page_url(url):
     """
-    Get data from a page.
-    :param url:
+    Get data from a page URL.
+    :param url: the page URL
     :return:
     """
     page = requests.get(url)
