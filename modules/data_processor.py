@@ -1,6 +1,5 @@
 from pyspark import SparkContext, SparkConf
 from pyspark.sql import SQLContext
-import re
 from bs4 import BeautifulSoup as soup
 import os
 import string
