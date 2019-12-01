@@ -2,6 +2,10 @@
   "data": {
     "data_location": "..\\data\\",
     "data_location_clean": "..\\data\\clean\\"
+  },
+
+  "pipeline": {
+    "process_only": false
   }
 
 }
