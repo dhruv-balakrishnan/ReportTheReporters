@@ -7,3 +7,8 @@ A project that takes a look at what reporters publish, and builds profiles based
 - etc.
 
 The project uses Python as its base, and PySpark for data-intensive processing. 
+Python >= 3.7 is required.
+
+### Running the Program
+* Setup environment with requirements.txt
+* Run review_client.py

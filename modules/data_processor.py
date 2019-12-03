@@ -6,8 +6,8 @@ import string
 import logging
 import pandas
 
-__FILEDIR__ = os.path.dirname(__file__)
-__WORKDIR__ = os.path.join(os.path.dirname(__FILEDIR__))
+_SCRIPT_DIR = os.path.realpath(os.path.dirname(__file__))
+__WORKDIR__ = os.path.abspath(os.path.join(_SCRIPT_DIR, '..'))
 
 logger = logging.getLogger()
 
@@ -53,7 +53,7 @@ class spark_processor():
         df.collect()
         print(df.head())
 
-        #This might not work, see: https://stackoverflow.com/questions/51603404/saving-dataframe-to-local-file-system-results-in-empty-results/51603898#51603898
+        #This might not work locally, see: https://stackoverflow.com/questions/51603404/saving-dataframe-to-local-file-system-results-in-empty-results/51603898#51603898
         #df.write.csv(os.path.join(__WORKDIR__, "output",'out.csv'))
 
         df.toPandas().to_csv(os.path.join(__WORKDIR__, "output",'out.csv'))

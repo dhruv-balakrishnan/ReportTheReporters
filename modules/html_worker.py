@@ -6,8 +6,8 @@ import requests
 import time
 import os
 
-__FILEDIR__ = os.path.dirname(__file__)
-__WORKDIR__ = os.path.join("..", "..", os.path.dirname(__FILEDIR__))
+_SCRIPT_DIR = os.path.realpath(os.path.dirname(__file__))
+__WORKDIR__ = os.path.abspath(os.path.join(_SCRIPT_DIR, '..'))
 
 class html_worker():
 
