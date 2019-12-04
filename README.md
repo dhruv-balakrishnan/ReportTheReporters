@@ -6,9 +6,11 @@ A project that takes a look at what reporters publish, and builds profiles based
 - Their most used words
 - etc.
 
-The project uses Python as its base, and PySpark for data-intensive processing. 
-Python >= 3.7 is required.
+### Requirements
+* Python >= 3.7 and appropriate PYTHONPATH env var
+* Spark 2.4.4 built for Hadoop 2.7.3 and SPARK_HOME env var
+* Hadoop Windows binaries and HADOOP_HOME env var
+* Package requirements can be met with `pip install -r requirements.txt`
 
 ### Running the Program
-* Setup environment with requirements.txt
 * Run review_client.py

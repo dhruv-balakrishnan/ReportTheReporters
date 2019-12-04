@@ -27,8 +27,8 @@ class spark_processor():
             full_filepath = os.path.join(data_location, file)
             data = sparkContext.textFile(full_filepath)
 
-            if data.isEmpty():
-                logger.error("RDD IS EMPTY")
+            with open(full_filepath, 'r', encoding='utf-8') as f:
+                soupified = soup(f.read(), 'html.parser')
 
             # TODO: Put all site-specific items like search lines into a config, so we can search each config setting
             author = data.filter(lambda line: '<meta name="author"' in line.lower()).first()
@@ -36,16 +36,19 @@ class spark_processor():
                 author = data.filter(lambda line: '<meta property="article:author"' in line.lower()).first()
 
             title = data.filter(lambda line: '<title>' in line.lower()).take(1)[0]
-            paragraphs = (data.filter(lambda line: '<p>' in line.lower()))
+
+            paragraphs = soupified.find_all('p')
 
             # Clean Data, which needs to be plugged into the dataframe
-            paragraphs = paragraphs.map(lambda item: self._clean_paragraph(item))
-            paragraphs = paragraphs.reduce(lambda x, y: x + " " + y)
+            # paragraphs = paragraphs.map(lambda item: self._clean_paragraph(item))
+            # paragraphs = paragraphs.reduce(lambda x, y: x + " " + y)
+
+            abstract, story = self._clean_paragraph(paragraphs)
             title_clean, location = self._clean_title(title)
             author_clean = self._clean_author(author)
 
 
-            first_pass.append((author_clean, title_clean, location, paragraphs))
+            first_pass.append((author_clean, title_clean, location, story))
 
         final_tuple = sparkContext.parallelize(first_pass)
         df = final_tuple.toDF(["Author", "Title", "Location", "Content"])
@@ -59,8 +62,20 @@ class spark_processor():
         df.toPandas().to_csv(os.path.join(__WORKDIR__, "output",'out.csv'))
 
 
-    def _clean_paragraph(self, line):
-        return soup(line, 'html.parser').text.strip(string.punctuation)
+    def _clean_paragraph(self, paragraphs):
+        abstract = paragraphs[0].text
+        story = ''
+
+        past_headers = False
+
+        for para in paragraphs:
+            _text = para.text
+            if past_headers:
+                _text = _text.strip(string.punctuation)
+                story = f"{story}|{_text}"
+            elif 'Last modified' in _text or 'First published' in _text:
+                past_headers = True
+        return abstract, story
 
 
     def _clean_author(self, line):
