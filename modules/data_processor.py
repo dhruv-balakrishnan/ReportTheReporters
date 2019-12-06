@@ -1,6 +1,10 @@
 from pyspark import SparkContext, SparkConf
-from pyspark.sql import *
+from pyspark.sql.types import StringType
+from pyspark.sql.context import SQLContext
+from pyspark.sql.functions import struct
 from bs4 import BeautifulSoup as soup
+
+import pyspark.sql.udf as udf
 import os
 import string
 import logging
@@ -31,7 +35,6 @@ class spark_processor():
                 soupified = soup(f.read(), 'html.parser')
 
             # TODO: Put all site-specific items like search lines into a config, so we can search each config setting
-
             # author = data.filter(lambda line: '<meta name="author"' in line.lower()).first()
             # if author is None:
             #     author = data.filter(lambda line: '<meta property="article:author"' in line.lower()).first()
@@ -67,8 +70,12 @@ class spark_processor():
         be called like: df.map(process_html_page)
         :return: None
         """
-        print(row.author)
-        # This has to be done with a UDF
+        word_counts = row.Content.flat_map(lambda x: x.split('|').split(' ')).\
+            map(lambda x: (x,1)).\
+            reduceByKey(lambda x, y: x + y).\
+            map(lambda x: (x[1], x[0])).\
+            sortByKey(False)
+        print(word_counts.collect().take(5))
 
 
     def _clean_paragraph(self, paragraphs):
@@ -110,11 +117,24 @@ class spark_processor():
 
     def __init__(self, spark_context_name, input_data_directory):
         self.df = None
+        self.conf = SparkConf().setAppName(spark_context_name)
+        self.sc = SparkContext(conf=self.conf).getOrCreate()
+        self.main(input_data_directory)
 
-        conf = SparkConf().setAppName(spark_context_name)
-        sc = SparkContext(conf=conf).getOrCreate()
 
+    def main(self, input_data_directory):
+        """
+        Runs the processing workload
+        :param input_data_directory: input folder for the clean files
+        :return: None
+        """
         # TODO: Switch to config
-        self.clean_html_files(sc, input_data_directory)
-        #This has to be done with a UDF
-        self.df.apply(lambda row: self.process_html_page(row))
+        self.clean_html_files(self.sc, input_data_directory)
+
+        udf_process_data = udf.UserDefinedFunction(lambda x: self.process_html_page(x), StringType())
+        #new_shit = self.df.withColumn('new_shit', udf_process_data(struct([self.df[x] for x in self.df.columns])))
+        self.df[0].Content.flat_map(lambda x: x.split('|').split(' ')). \
+            map(lambda x: (x, 1)). \
+            reduceByKey(lambda x, y: x + y). \
+            map(lambda x: (x[1], x[0])). \
+            sortByKey(False)
