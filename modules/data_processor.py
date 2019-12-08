@@ -1,10 +1,11 @@
 from pyspark import SparkContext, SparkConf
-from pyspark.sql.types import StringType
 from pyspark.sql.context import SQLContext
-from pyspark.sql.functions import struct
+# https://stackoverflow.com/questions/51226469/what-does-pyspark-need-psutil-for-faced-userwarning-please-install-psutil-to/51249740
+import psutil
 from bs4 import BeautifulSoup as soup
+from pyspark.sql.functions import udf
+# Is this the same as pyspark.sql.udf???
 
-import pyspark.sql.udf as udf
 import os
 import string
 import logging
@@ -38,22 +39,29 @@ class spark_processor():
             # author = data.filter(lambda line: '<meta name="author"' in line.lower()).first()
             # if author is None:
             #     author = data.filter(lambda line: '<meta property="article:author"' in line.lower()).first()
-            #title = data.filter(lambda line: '<title>' in line.lower()).take(1)[0]
+            # title = data.filter(lambda line: '<title>' in line.lower()).take(1)[0]
             # paragraphs = paragraphs.map(lambda item: self._clean_paragraph(item))
             # paragraphs = paragraphs.reduce(lambda x, y: x + " " + y)
 
+            # Get Author
             author = soupified.find("meta", {"name": "author"})["content"]
 
+            # Get title, and news region
             title = soupified.title.text
             title_clean, news_region = self._clean_title(title)
 
+            # Get the abstract and the entire story
             paragraphs = soupified.find_all('p')
             abstract, story = self._clean_paragraph(paragraphs)
+            # If we parallelize without splitting, spark will auto split by character, which is not what we want.
+            story_rdd = self.sc.parallelize(story.split(' '))
+            process_html_page(story_rdd)
+
             first_pass.append((author, title_clean, news_region, story))
 
         # Convert into Spark DataFrame for further processing.
         final_tuple = sparkContext.parallelize(first_pass)
-        # An SQLContext or SparkSession is required for an RDD to have the toDF attribute
+        # A SQLContext or SparkSession is required for an RDD to have the toDF attribute
         self.df = final_tuple.toDF(["Author", "Title", "Location", "Content"])
         # df.collect()
         # print(df.head())
@@ -62,20 +70,6 @@ class spark_processor():
         #df.write.csv(os.path.join(__WORKDIR__, "output",'out.csv'))
 
         #df.toPandas().to_csv(os.path.join(__WORKDIR__, "output",'out.csv'))
-
-
-    def process_html_page(self, row):
-        """
-        Processes a single html 'page', which is actually a row in the dataframe of cleaned data. This function would
-        be called like: df.map(process_html_page)
-        :return: None
-        """
-        word_counts = row.Content.flat_map(lambda x: x.split('|').split(' ')).\
-            map(lambda x: (x,1)).\
-            reduceByKey(lambda x, y: x + y).\
-            map(lambda x: (x[1], x[0])).\
-            sortByKey(False)
-        print(word_counts.collect().take(5))
 
 
     def _clean_paragraph(self, paragraphs):
@@ -93,10 +87,9 @@ class spark_processor():
         for para in paragraphs:
             _text = para.text
             if past_headers:
-                #_text = _text.strip(string.punctuation)
                 # Removing non-ascii character hack. https://stackoverflow.com/questions/1342000/how-to-make-the-python-interpreter-correctly-handle-non-ascii-characters-in-stri?noredirect=1&lq=1
                 _text = ''.join(s for s in _text if ord(s) < 128 and s not in string.punctuation)
-                story = f"{story}|{_text}"
+                story = f"{story} {_text}"
             elif 'Last modified' in _text or 'First published' in _text:
                 past_headers = True
         return abstract, story
@@ -128,13 +121,32 @@ class spark_processor():
         :param input_data_directory: input folder for the clean files
         :return: None
         """
-        # TODO: Switch to config
+        # TODO: Switch to config someday
         self.clean_html_files(self.sc, input_data_directory)
 
-        udf_process_data = udf.UserDefinedFunction(lambda x: self.process_html_page(x), StringType())
-        #new_shit = self.df.withColumn('new_shit', udf_process_data(struct([self.df[x] for x in self.df.columns])))
-        self.df[0].Content.flat_map(lambda x: x.split('|').split(' ')). \
-            map(lambda x: (x, 1)). \
-            reduceByKey(lambda x, y: x + y). \
-            map(lambda x: (x[1], x[0])). \
-            sortByKey(False)
+        # The following lines wont work, as the SparkContext only works in the driver, and cannot be sent to a worker.
+        #   sc = self.sc
+        #   udf_process_data = udf(lambda x: process_html_page(x, sc), StringType())
+        #   self.df.select('Author', udf_process_data('Content')).show(truncate=False)
+        # This error will manifest:
+        #   _pickle.PicklingError: Could not serialize object: Exception: It appears that you are attempting to
+        #   reference SparkContext from a broadcast variable, action, or transformation. SparkContext can only be used
+        #   on the driver, not in code that it run on workers. For more information, see SPARK-5063.
+
+        # The following wont work, as the UDF requires that we pass a PySpark DataFrame,
+        # which cannot be pickled (serialized)
+        #   udf_process_data = udf(lambda x: process_html_page(x), StringType())
+        #   self.df.select('Author', udf_process_data('Content')).show(truncate=False)
+
+
+def process_html_page(content):
+    """
+    Processes a single html 'page', which is actually an RDD of cleaned article content.
+    :param: content, an RDD of strings, which we can perform operations on
+    :return: None
+    """
+    words_rdd = content.flatMap(lambda x: x.split(' ')).\
+        map(lambda x: (x, 1)).\
+        reduceByKey(lambda x, y: x + y).\
+        map(lambda x: (x[1], x[0])).filter(lambda x: len(x[1]) > 4)
+    print(words_rdd.collect()[:5])

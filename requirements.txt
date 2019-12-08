@@ -2,4 +2,5 @@
 bs4
 pyspark
 pandas
+psutil
 
