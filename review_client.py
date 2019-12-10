@@ -1,24 +1,27 @@
-from modules import data_processor, html_worker
+from modules import html_processor, html_worker
 import logging
 import os
 import argparse
 """
-Sets up the program. Entrypoint.
+Entrypoint.
 """
+
 _SCRIPT_DIR = os.path.realpath(os.path.dirname(__file__))
 __WORKDIR__ = os.path.abspath(_SCRIPT_DIR)
 
+
 def run(logger, page_count):
-    logger.info("Starting Pipeline")
+    logger.info("Setting up..")
     data_directory = os.path.join(__WORKDIR__, "data")
     input_data_directory = os.path.join(data_directory, "clean")
     output_data_directory = os.path.join(__WORKDIR__, "output")
 
-    logger.info("Organizing Environment..")
+    logger.info("Grabbing Data..")
     # The default number of files to work on is 5.
-    html_getter = html_worker.html_worker(page_count, data_directory, True)
+    html_worker.GetData(page_count, data_directory, True)
+
     logger.info("Processing Data..")
-    html_processor = data_processor.spark_processor("Test", input_data_directory)
+    html_processor.main(input_data_directory)
 
 
 def init():
@@ -54,7 +57,7 @@ def init():
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Run ReportTheReporters')
-    parser.add_argument('--page_count', dest='page_count', type=int, default=5,
+    parser.add_argument('--page_count', dest='page_count', type=int, default=50,
                         help='How many HTML pages to process. Leave empty for all. Default is 5.')
 
     args = parser.parse_args()

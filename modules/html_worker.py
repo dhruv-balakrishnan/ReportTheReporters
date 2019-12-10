@@ -9,7 +9,8 @@ import os
 _SCRIPT_DIR = os.path.realpath(os.path.dirname(__file__))
 __WORKDIR__ = os.path.abspath(os.path.join(_SCRIPT_DIR, '..'))
 
-class html_worker():
+
+class GetData:
 
     def _read_page(self, data):
         """
@@ -26,14 +27,13 @@ class html_worker():
             text = f.read()
             page = soup(text, 'html.parser')
 
-            author = page.find("meta", {"name":"author"})["content"]
-            keywords = page.find("meta", {"name":"keywords"})["content"].split(',')
+            author = page.find("meta", {"name": "author"})["content"]
+            keywords = page.find("meta", {"name": "keywords"})["content"].split(',')
             title_arr = page.title.text.split('|')
             title = title_arr[0]
             news_location = title_arr[1]
 
             print(f"{title}, {news_location}\n{author}\n{keywords}")
-
 
     def _get_pages_from_url(self, url):
         """
@@ -43,7 +43,7 @@ class html_worker():
         """
         file_path = None
         try:
-            time.sleep(1) # To mitigate server load
+            time.sleep(1)  # To mitigate server load
             page = requests.get(url)
 
             if page.status_code == 200:
@@ -74,7 +74,6 @@ class html_worker():
 
         return file_path
 
-
     def prepare_clean_data(self, input, page_limit):
         """
         Reads the url_list.txt file, captures the url for a page, and calls other
@@ -90,12 +89,11 @@ class html_worker():
                 self._get_pages_from_url(url_obj["url"])
 
                 if index % 100 == 0:
-                    self.logger.info(f"  Processed {index+1} files")
+                    self.logger.info(f"  Processed {index + 1} files")
 
                 if page_limit is not None and index == page_limit:
                     self.logger.info("  Page Limit reached.")
                     break
-
 
     def prepare_environment(self):
         """
