@@ -12,6 +12,7 @@ __WORKDIR__ = os.path.abspath(os.path.join(_SCRIPT_DIR, '..'))
 
 class GetData:
 
+
     def _read_page(self, data):
         """
         Read a pages HTML content and extract relevant data including:
@@ -34,6 +35,7 @@ class GetData:
             news_location = title_arr[1]
 
             print(f"{title}, {news_location}\n{author}\n{keywords}")
+
 
     def _get_pages_from_url(self, url):
         """
@@ -74,6 +76,7 @@ class GetData:
 
         return file_path
 
+
     def prepare_clean_data(self, input, page_limit):
         """
         Reads the url_list.txt file, captures the url for a page, and calls other
@@ -95,6 +98,7 @@ class GetData:
                     self.logger.info("  Page Limit reached.")
                     break
 
+
     def prepare_environment(self):
         """
         Prepares the environment for use.
@@ -109,6 +113,7 @@ class GetData:
         for file in os.listdir(self.clean_data_directory):
             if os.path.exists(os.path.abspath(file)):
                 os.remove(os.path.abspath(file))
+
 
     def __init__(self, page_limit, data_directory, clean_env=True):
         """

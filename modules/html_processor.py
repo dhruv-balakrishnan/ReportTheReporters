@@ -120,6 +120,8 @@ def process_html_page(content):
 
     print(f"\n{words_rdd.take(10)}")
 
+# -- Helper Functions -- #
+
 
 def _get_text_polarity(text):
     """
@@ -245,6 +247,9 @@ def _get_and_clean_title(text):
     location = line_s[1].strip()
 
     return title_cleaned, location
+
+
+# -- Main Functions -- #
 
 
 def clean_data(sparkContext, input_location):
