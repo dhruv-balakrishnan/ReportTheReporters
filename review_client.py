@@ -21,7 +21,7 @@ def run(logger, page_count):
     html_worker.GetData(page_count, data_directory, True)
 
     logger.info("Processing Data..")
-    html_processor.main(input_data_directory)
+    # CALL HERE
 
 
 def init():
@@ -57,7 +57,7 @@ def init():
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Run ReportTheReporters')
-    parser.add_argument('--page_count', dest='page_count', type=int, default=50,
+    parser.add_argument('--page_count', dest='page_count', type=int, default=100,
                         help='How many HTML pages to process. Leave empty for all. Default is 5.')
 
     args = parser.parse_args()

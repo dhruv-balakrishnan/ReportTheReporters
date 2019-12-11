@@ -236,6 +236,7 @@ def _get_and_clean_title(text):
     :return title_cleaned: the title
     :return location: the publish location
     """
+    title_cleaned, location = " ", " "
 
     title = text.filter(lambda line: '<title>' in line.lower()).take(1)[0]
 
@@ -290,16 +291,25 @@ def generate_insights(sparkContext, df):
     - Article Sentiment
     - Article Stance
     - Article Statistics (Top five words, word count, etc.)
-
     :param sparkContext: the spark context
     :param df: the data frame with clean data
     :return:
     """
-    top_words_udf = udf(_get_top_freq_words, ArrayType(StringType()))
-    df = df.withColumn('Word_Count', top_words_udf(F.split(F.col('Story'), ' ')))
 
+    # Get the top five words for each story.
+    top_words_udf = udf(_get_top_freq_words, ArrayType(StringType()))
+    df = df.withColumn('Top_Five', top_words_udf(F.split(F.col('Story'), ' ')))
+
+    # Get the word count for each article.
+    df = df.withColumn('Word_Count', F.size(F.split(F.col('Story'), ' ')))
+
+    # Get the polarity for each article.
     polarity_udf = udf(_get_text_polarity, StringType())
     df = df.withColumn('Polarity', polarity_udf(df['Story'])).show()
+
+    # Write data to parquet file.
+    df.write.parquet(os.path.join(__WORKDIR__, "output", "processed.parquet"))
+    df.write.csv(os.path.join(__WORKDIR__, "output", "processed.csv"))
 
 
 if __name__ == "__main__":
