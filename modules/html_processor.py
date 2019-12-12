@@ -18,82 +18,59 @@ __WORKDIR__ = os.path.abspath(os.path.join(_SCRIPT_DIR, '..'))
 
 logger = logging.getLogger()
 
-def clean_html_files(sparkContext, data_location):
-    """
-    Cleans the text-only HTML files that were previously downloaded.
-    :param sparkContext: the spark context object
-    :param data_location: location of the input data files
-    :return: None
-    """
-    sqlContext = SQLContext(sparkContext)
-    first_pass = []
-    counter = 0
-
-    for file in os.listdir(data_location):
-        counter += 1
-        print(counter)
-        full_filepath = os.path.join(data_location, file)
-        data = sparkContext.textFile(full_filepath)
-
-        with open(full_filepath, 'r', encoding='utf-8') as f:
-            soupified = soup(f.read(), 'html.parser')
-
-        # For Sentiment Analysis
-        abstract_punct, story_punct = _clean_paragraph(paragraphs, False)
-
-        # blob = TextBlob(story)
-        # polarity, sentiment = blob.sentiment
-        # if polarity * 100 > 70:
-        #     print("Positive")
-        # elif 30 < polarity * 100 < 70:
-        #     print("Neutral")
-        # else:
-        #     print("Negative")
-        # print(f"Polarity: {polarity}, Sentiment: {sentiment}")
-        # Requires training
-        # print(f"Classification: {blob.classify()}")
-
-        # If we parallelize without splitting, spark will auto split by character, which is not what we want.
-        # story_rdd = sc.parallelize(story.split(' '))
-
-
-        first_pass.append((author, title_clean, news_region, story))
-
-    # Convert into Spark DataFrame for further processing.
-    final_tuple = sparkContext.parallelize(first_pass)
-    # A SQLContext or SparkSession is required for an RDD to have the toDF attribute
-    df = final_tuple.toDF(["Author", "Title", "Location", "Content"])
-    # df.collect()
-    # print(df.head())
-
-    #This might not work locally, see: https://stackoverflow.com/questions/51603404/saving-dataframe-to-local-file-system-results-in-empty-results/51603898#51603898
-    #df.write.csv(os.path.join(__WORKDIR__, "output",'out.csv'))
-
-    #df.toPandas().to_csv(os.path.join(__WORKDIR__, "output",'out.csv'))
-
-
-def main(input_data_directory):
-    """
-    Runs the processing workload
-    :param input_data_directory: input folder for the clean files
-    :return: None
-    """
-    # TODO: Switch to config someday
-    clean_html_files(sc, input_data_directory)
-
-    # The following lines wont work, as the SparkContext only works in the driver, and cannot be sent to a worker.
-    #   sc = self.sc
-    #   udf_process_data = udf(lambda x: process_html_page(x, sc), StringType())
-    #   self.df.select('Author', udf_process_data('Content')).show(truncate=False)
-    # This error will manifest:
-    #   _pickle.PicklingError: Could not serialize object: Exception: It appears that you are attempting to
-    #   reference SparkContext from a broadcast variable, action, or transformation. SparkContext can only be used
-    #   on the driver, not in code that it run on workers. For more information, see SPARK-5063.
-
-    # The following wont work, as the UDF requires that we pass a PySpark DataFrame,
-    # which cannot be pickled (serialized)
-    #   udf_process_data = udf(lambda x: process_html_page(x), StringType())
-    #   self.df.select('Author', udf_process_data('Content')).show(truncate=False)
+#
+# def clean_html_files(sparkContext, data_location):
+#     """
+#     Cleans the text-only HTML files that were previously downloaded.
+#     :param sparkContext: the spark context object
+#     :param data_location: location of the input data files
+#     :return: None
+#     """
+#     sqlContext = SQLContext(sparkContext)
+#     first_pass = []
+#     counter = 0
+#
+#     for file in os.listdir(data_location):
+#         counter += 1
+#         print(counter)
+#         full_filepath = os.path.join(data_location, file)
+#         data = sparkContext.textFile(full_filepath)
+#
+#         with open(full_filepath, 'r', encoding='utf-8') as f:
+#             soupified = soup(f.read(), 'html.parser')
+#
+#         # For Sentiment Analysis
+#         abstract_punct, story_punct = _clean_paragraph(paragraphs, False)
+#
+#         # blob = TextBlob(story)
+#         # polarity, sentiment = blob.sentiment
+#         # if polarity * 100 > 70:
+#         #     print("Positive")
+#         # elif 30 < polarity * 100 < 70:
+#         #     print("Neutral")
+#         # else:
+#         #     print("Negative")
+#         # print(f"Polarity: {polarity}, Sentiment: {sentiment}")
+#         # Requires training
+#         # print(f"Classification: {blob.classify()}")
+#
+#         # If we parallelize without splitting, spark will auto split by character, which is not what we want.
+#         # story_rdd = sc.parallelize(story.split(' '))
+#
+#
+#         first_pass.append((author, title_clean, news_region, story))
+#
+#     # Convert into Spark DataFrame for further processing.
+#     final_tuple = sparkContext.parallelize(first_pass)
+#     # A SQLContext or SparkSession is required for an RDD to have the toDF attribute
+#     df = final_tuple.toDF(["Author", "Title", "Location", "Content"])
+#     # df.collect()
+#     # print(df.head())
+#
+#     #This might not work locally, see: https://stackoverflow.com/questions/51603404/saving-dataframe-to-local-file-system-results-in-empty-results/51603898#51603898
+#     #df.write.csv(os.path.join(__WORKDIR__, "output",'out.csv'))
+#
+#     #df.toPandas().to_csv(os.path.join(__WORKDIR__, "output",'out.csv'))
 
 
 def process_html_page(content):
@@ -241,13 +218,19 @@ def _get_and_clean_title(text):
     :return title_cleaned: the title
     :return location: the publish location
     """
-    title_cleaned, location = " ", " "
+    title_cleaned, location = "Unavailable", "Unavailable"
 
-    title = text.filter(lambda line: '<title>' in line.lower()).take(1)[0]
+    try:
+        title = text.filter(lambda line: '<title>' in line.lower()).take(1)[0]
+        line_s = title.split(' | ')
+        title_cleaned = soup(line_s[0], 'html.parser').text
+    except Exception as E:
+        logger.warning("Unable to get title.")
 
-    line_s = title.split(' | ')
-    title_cleaned = soup(line_s[0], 'html.parser').text
-    location = line_s[1].strip()
+    try:
+        location = line_s[1].strip()
+    except Exception as E:
+        logger.warning("Unable to get location.")
 
     return title_cleaned, location
 
@@ -292,7 +275,7 @@ def clean_data(sparkContext, sqlContext, input_location):
         raw_list.append([author, title, location, abstract, story, NullType(), 0, ""])
 
     # Parallelize and convert to DataFrame
-    raw_rdd = sc.parallelize(raw_list)
+    raw_rdd = sparkContext.parallelize(raw_list)
     raw_df = sqlContext.createDataFrame(raw_rdd, ["Author", "Title", "Location", "Abstract", "Story",
                                                   "Top_Five", "Word_Count", "Polarity"])
     return raw_df
@@ -326,28 +309,28 @@ def generate_insights(sparkContext, sqlContext, df):
     # df.write.csv(os.path.join(__WORKDIR__, "output", "processed.csv"))
 
 
-if __name__ == "__main__":
+def main(input_data_directory):
 
-    parser = argparse.ArgumentParser(description='Process html files')
+    # parser = argparse.ArgumentParser(description='Process html files')
+    #
+    # parser.add_argument('--input_location',
+    #                     dest='input_location',
+    #                     type=str,
+    #                     default=os.path.join(__WORKDIR__, "data", "clean"),
+    #                     help='Input location for the html files')
+    #
+    # parser.add_argument('--spark_context_name',
+    #                     dest='spark_context_name',
+    #                     type=str,
+    #                     default="dudewhat",
+    #                     help='Name of the Spark context')
+    #
+    # args = parser.parse_args()
 
-    parser.add_argument('--input_location',
-                        dest='input_location',
-                        type=str,
-                        default=os.path.join(__WORKDIR__, "data", "clean"),
-                        help='Input location for the html files')
-
-    parser.add_argument('--spark_context_name',
-                        dest='spark_context_name',
-                        type=str,
-                        default="dudewhat",
-                        help='Name of the Spark context')
-
-    args = parser.parse_args()
-
-    conf = SparkConf().setAppName(args.spark_context_name)
+    conf = SparkConf().setAppName("Reporter Review.")
     sc = SparkContext(conf=conf).getOrCreate()
     sqlContext = SQLContext(sc)
 
-    df = clean_data(sc, sqlContext,  args.input_location)
+    df = clean_data(sc, sqlContext,  input_data_directory)
     generate_insights(sc, sqlContext, df)
 

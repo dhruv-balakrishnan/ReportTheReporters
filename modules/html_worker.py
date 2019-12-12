@@ -1,3 +1,5 @@
+import random
+
 from bs4 import BeautifulSoup as soup
 import logging
 import json
@@ -51,6 +53,9 @@ class GetData:
             if page.status_code == 200:
                 file_name = url.split('/')[-1].split('?')[0] + ".txt"
 
+                if file_name.split('.')[0] == '':
+                    file_name = f"{random.randint(0, 50000)}.txt"
+
                 # TODO: Refactor this to use a variable instead of a hardcoded string path
                 file_path = os.path.join(self.clean_data_directory, file_name)
 
@@ -81,6 +86,7 @@ class GetData:
         """
         Reads the url_list.txt file, captures the url for a page, and calls other
         methods to save clean data for later processing.
+        :param page_limit:
         :param input: path to the input text file containing the URLs
         :return: None
         """

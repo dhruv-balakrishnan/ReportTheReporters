@@ -22,6 +22,7 @@ def run(logger, page_count):
 
     logger.info("Processing Data..")
     # CALL HERE
+    html_processor.main(input_data_directory)
 
 
 def init():
