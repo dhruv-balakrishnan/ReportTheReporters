@@ -58,8 +58,8 @@ def init():
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Run ReportTheReporters')
-    parser.add_argument('--page_count', dest='page_count', type=int, default=100,
-                        help='How many HTML pages to process. Leave empty for all. Default is 5.')
+    parser.add_argument('--page_count', dest='page_count', type=int, default=None,
+                        help='How many HTML pages to process. Leave empty for all. Default is None.')
 
     args = parser.parse_args()
 
