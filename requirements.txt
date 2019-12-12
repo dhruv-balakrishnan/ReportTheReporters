@@ -3,4 +3,5 @@ bs4
 pyspark
 pandas
 psutil
+nltk
 textblob

@@ -1,21 +1,17 @@
-import argparse
 from pyspark.sql.functions import udf
 from pyspark.sql import functions as F
 from pyspark import SparkContext, SparkConf
 from pyspark.sql.context import SQLContext
-# https://stackoverflow.com/questions/51226469/what-does-pyspark-need-psutil-for-faced-userwarning-please-install-psutil-to/51249740
-import psutil
 from bs4 import BeautifulSoup as soup
 from pyspark.sql.types import *
 from textblob import TextBlob
-from operator import floordiv
-# Is this the same as pyspark.sql.udf???
 
+# https://stackoverflow.com/questions/51226469/what-does-pyspark-need-psutil-for-faced-userwarning-please-install-psutil-to/51249740
+import psutil
+import argparse
 import os
 import string
 import logging
-import pyspark.sql.functions
-import pandas as pd
 
 _SCRIPT_DIR = os.path.realpath(os.path.dirname(__file__))
 __WORKDIR__ = os.path.abspath(os.path.join(_SCRIPT_DIR, '..'))
@@ -120,7 +116,7 @@ def process_html_page(content):
 
     print(f"\n{words_rdd.take(10)}")
 
-# -- Helper Functions -- #
+# -- Insight Functions -- #
 
 
 def _get_text_polarity(text):
@@ -168,9 +164,13 @@ def _get_top_freq_words(text):
     return x[:5]
 
 
-def _get_and_clean_content(text, punctuation):
+# -- Cleaning Functions -- #
+
+
+def _get_and_clean_content(text, punctuation, stopwords):
     """
-    Gets the content (paragraphs) of the article, and returns a cleaned version.
+    Gets the content (paragraphs) of the article, and returns a cleaned version in lowercase, without punctuation
+    and without stop words.
     :param text: the RDD of the article
     :return abstract: The abstract of the story
     :return story: The full, cleaned, story.
@@ -202,7 +202,10 @@ def _get_and_clean_content(text, punctuation):
 
             _text = ''.join(s.lower() for s in _text if (s not in punctuation and ord(s) < 128))
 
-            story = f"{story} {_text}"
+            for word in _text.split(" "):
+                if word not in stopwords:
+                    story = f"{story} {word}"
+
         elif 'Last modified' in _text or 'First published' in _text:
             past_headers = True
 
@@ -252,7 +255,7 @@ def _get_and_clean_title(text):
 # -- Main Functions -- #
 
 
-def clean_data(sparkContext, input_location):
+def clean_data(sparkContext, sqlContext, input_location):
     """
     For each file in input_location, we:
     1. Extract the Author
@@ -264,11 +267,15 @@ def clean_data(sparkContext, input_location):
     :param input_location: location of the input files
     :return raw_df: a PySpark DataFrame that contains clean data ready for processing.
     """
-    sqlContext = SQLContext(sparkContext)
+
 
     logger.info("Starting Data Cleaning")
 
     punctuation = string.punctuation.join([",'$:."])
+
+    with open(os.path.join(__WORKDIR__, "data", "stop_words.txt")) as f:
+        stopwords = f.read().splitlines()
+
     raw_list = []
 
     for file in os.listdir(input_location):
@@ -278,19 +285,20 @@ def clean_data(sparkContext, input_location):
 
         author = _get_and_clean_author(text)
         title, location = _get_and_clean_title(text)
-        abstract, story = _get_and_clean_content(text, punctuation)
+        abstract, story = _get_and_clean_content(text, punctuation, stopwords)
 
         logger.debug(f"{author}:{title}\n{abstract}\n\n")
 
-        raw_list.append([author, title, location, abstract, story])
+        raw_list.append([author, title, location, abstract, story, NullType(), 0, ""])
 
     # Parallelize and convert to DataFrame
     raw_rdd = sc.parallelize(raw_list)
-    raw_df = sqlContext.createDataFrame(raw_rdd, ["Author", "Title", "Location", "Abstract", "Story"])
+    raw_df = sqlContext.createDataFrame(raw_rdd, ["Author", "Title", "Location", "Abstract", "Story",
+                                                  "Top_Five", "Word_Count", "Polarity"])
     return raw_df
 
 
-def generate_insights(sparkContext, df):
+def generate_insights(sparkContext, sqlContext, df):
     """
     Generates insights using the cleaned dataset. The list of insights are as follows:
     - Article Sentiment
@@ -303,18 +311,19 @@ def generate_insights(sparkContext, df):
 
     # Get the top five words for each story.
     top_words_udf = udf(_get_top_freq_words, ArrayType(StringType()))
-    df = df.withColumn('Top_Five', top_words_udf(F.split(F.col('Story'), ' ')))
+    dfc = df.withColumn('Top_Five', top_words_udf(F.split(F.col('Story'), ' ')))
 
     # Get the word count for each article.
-    df = df.withColumn('Word_Count', F.size(F.split(F.col('Story'), ' ')))
+    dfc = dfc.withColumn('Word_Count', F.size(F.split(F.col('Story'), ' ')))
 
     # Get the polarity for each article.
     polarity_udf = udf(_get_text_polarity, StringType())
-    df = df.withColumn('Polarity', polarity_udf(df['Story'])).show()
+    dfc = dfc.withColumn('Polarity', polarity_udf(df['Story']))
 
+    dfc.show(truncate=False, vertical=True)
     # Write data to parquet file.
-    df.write.parquet(os.path.join(__WORKDIR__, "output", "processed.parquet"))
-    df.write.csv(os.path.join(__WORKDIR__, "output", "processed.csv"))
+    # df.write.parquet(os.path.join(__WORKDIR__, "output", "processed.parquet"))
+    # df.write.csv(os.path.join(__WORKDIR__, "output", "processed.csv"))
 
 
 if __name__ == "__main__":
@@ -337,7 +346,8 @@ if __name__ == "__main__":
 
     conf = SparkConf().setAppName(args.spark_context_name)
     sc = SparkContext(conf=conf).getOrCreate()
+    sqlContext = SQLContext(sc)
 
-    df = clean_data(sc, args.input_location)
-    generate_insights(sc, df)
+    df = clean_data(sc, sqlContext,  args.input_location)
+    generate_insights(sc, sqlContext, df)
 
